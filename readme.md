@@ -71,7 +71,24 @@ sudo rkn-guard uninstall               снять защиту и удалить
 
 ## Списки
 
-LISTS_SECTION
+Встроенные (`rkn-guard sources` показывает их как b1…b5):
+
+| № | список | что внутри |
+|---|---|---|
+| b1 | [shadow-netlab/government_networks](https://github.com/shadow-netlab/traffic-guard-lists) | сети госорганов по ASN (~2800) |
+| b2 | [shadow-netlab/antiscanner](https://github.com/shadow-netlab/traffic-guard-lists) | известные сканеры (~165) |
+| b3 | [shadow-netlab/skipa](https://github.com/shadow-netlab/traffic-guard-lists) | сканеры СКИПА |
+| b4 | [C24Be/AS_Network_List](https://github.com/C24Be/AS_Network_List) | сети РКН/госорганов и связанных организаций (~1170) |
+| b5 | [tread-lightly/CyberOK_Skipa_ips](https://github.com/tread-lightly/CyberOK_Skipa_ips) | сканеры CyberOK/СКИПА |
+
+Списки сильно пересекаются: b3 и b5 сейчас совпадают построчно, b2 целиком
+покрыт остальными. Оба зеркала СКИПА оставлены ради отказоустойчивости, а
+дубли и вложенные подсети rkn-guard убирает сам: из ~4400 записей в наборы
+попадает ~2600, покрытие адресов то же.
+
+В b4 есть крупные диапазоны, в том числе сети VK (`87.240.128.0/18`, `95.213.0.0/17`).
+Блокируется только входящий трафик, но если к вашему серверу должны ходить
+сервисы из этих сетей — выключите b4: `rkn-guard sources disable b4`.
 
 Встроенные списки целиком заменяются файлом `/etc/rkn-guard-sources.list`
 (один URL на строку, `#` — комментарий). Свои списки — `rkn-guard sources add`:
