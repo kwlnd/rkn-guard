@@ -71,7 +71,7 @@ sudo rkn-guard uninstall               снять защиту и удалить
 
 ## Списки
 
-Встроенные (`rkn-guard sources` показывает их как b1…b5):
+Встроенные (`rkn-guard sources` показывает их как b1…b12):
 
 | № | список | что внутри |
 |---|---|---|
@@ -80,11 +80,21 @@ sudo rkn-guard uninstall               снять защиту и удалить
 | b3 | [shadow-netlab/skipa](https://github.com/shadow-netlab/traffic-guard-lists) | сканеры СКИПА |
 | b4 | [C24Be/AS_Network_List](https://github.com/C24Be/AS_Network_List) | сети РКН/госорганов и связанных организаций (~1170) |
 | b5 | [tread-lightly/CyberOK_Skipa_ips](https://github.com/tread-lightly/CyberOK_Skipa_ips) | сканеры CyberOK/СКИПА |
+| b6–b7 | [OpenFilters/internet-scanners](https://github.com/OpenFilters/internet-scanners) censys v4/v6 | Censys (~20) |
+| b8–b9 | OpenFilters shodan v4/v6 | Shodan (~110) |
+| b10–b11 | OpenFilters shadowserver v4/v6 | Shadowserver (~14) |
+| b12 | OpenFilters onyphe v4 | ONYPHE (10) |
 
 Списки сильно пересекаются: b3 и b5 сейчас совпадают построчно, b2 целиком
 покрыт остальными. Оба зеркала СКИПА оставлены ради отказоустойчивости, а
 дубли и вложенные подсети rkn-guard убирает сам: из ~4400 записей в наборы
 попадает ~2600, покрытие адресов то же.
+
+b6–b12 — коммерческие сканеры интернета: по их базам ищут открытые серверы.
+Shadowserver заодно присылает владельцам сетей отчёты об уязвимостях — если они
+вам нужны, выключите b10–b11. Списки BinaryEdge, Stretchoid, LeakIX из того же
+репозитория не встроены: это тысячи облачных /32, которые быстро меняют владельцев;
+при желании добавьте их сами через `sources add`.
 
 В b4 есть крупные диапазоны, в том числе сети VK (`87.240.128.0/18`, `95.213.0.0/17`).
 Блокируется только входящий трафик, но если к вашему серверу должны ходить

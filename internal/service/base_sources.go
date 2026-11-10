@@ -18,6 +18,16 @@ var DefaultBaseSources = []string{
 	"https://raw.githubusercontent.com/shadow-netlab/traffic-guard-lists/main/public/skipa.list",
 	"https://raw.githubusercontent.com/C24Be/AS_Network_List/main/blacklists/blacklist.txt",
 	"https://raw.githubusercontent.com/tread-lightly/CyberOK_Skipa_ips/main/lists/skipa_cidr.txt",
+	// Коммерческие сканеры интернета с собственными диапазонами: их базы
+	// используют, чтобы находить серверы. Облачные /32 (BinaryEdge, Stretchoid)
+	// не берём: адреса быстро меняют владельцев.
+	"https://raw.githubusercontent.com/OpenFilters/internet-scanners/main/cidr/censys_v4.txt",
+	"https://raw.githubusercontent.com/OpenFilters/internet-scanners/main/cidr/censys_v6.txt",
+	"https://raw.githubusercontent.com/OpenFilters/internet-scanners/main/cidr/shodan_v4.txt",
+	"https://raw.githubusercontent.com/OpenFilters/internet-scanners/main/cidr/shodan_v6.txt",
+	"https://raw.githubusercontent.com/OpenFilters/internet-scanners/main/cidr/shadowserver_v4.txt",
+	"https://raw.githubusercontent.com/OpenFilters/internet-scanners/main/cidr/shadowserver_v6.txt",
+	"https://raw.githubusercontent.com/OpenFilters/internet-scanners/main/cidr/onyphe_v4.txt",
 }
 
 // LoadBaseSources возвращает базовые списки с учётом файла переопределения.
