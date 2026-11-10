@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/mattn/go-isatty"
 	"github.com/rs/zerolog"
@@ -54,9 +55,14 @@ func privileged(fn func() error) error {
 	if err := requireRoot(); err != nil {
 		return err
 	}
-	lock, err := service.AcquireLock()
+	lock, err := service.AcquireLock(5*time.Minute, func() {
+		logPtr().Info().Msg("жду: идёт другая операция rkn-guard (например, обновление по таймеру)")
+	})
+	if errors.Is(err, service.ErrLockTimeout) {
+		return errors.New("другая операция rkn-guard идёт дольше 5 минут; повторите позже")
+	}
 	if err != nil {
-		return errors.New("уже идёт другая операция rkn-guard; повторите позже")
+		return fmt.Errorf("не удалось взять блокировку: %w", err)
 	}
 	defer lock.Close()
 	return fn()

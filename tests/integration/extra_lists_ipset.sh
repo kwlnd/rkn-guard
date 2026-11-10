@@ -40,6 +40,8 @@ expect_status() {
     "$@" > "$work/result.log" 2>&1 || actual=$?
     [[ "$actual" == "$expected" ]] || { cat "$work/result.log"; echo "Код $actual вместо $expected" >&2; exit 1; }
 }
+# «! cmd» под set -e не останавливает скрипт, поэтому отсутствие проверяем явно.
+absent() { if ipset test "$1" "$2" 2>/dev/null; then echo "$2 не должен быть в $1" >&2; exit 1; fi; }
 entries() { grep -c "^add $1 " /etc/ipset.conf || true; }
 
 ipset create foreign hash:net
@@ -53,12 +55,12 @@ run update
 ipset test SCANNERS-BLOCK-V4 192.0.2.200
 
 run sources add --disabled "$url/extra"
-! ipset test SCANNERS-BLOCK-V4 198.51.100.1 2>/dev/null
+absent SCANNERS-BLOCK-V4 198.51.100.1
 run sources enable 1
 ipset test SCANNERS-BLOCK-V4 198.51.100.1
 ipset test SCANNERS-BLOCK-V6 2001:db8:1::1
 run sources disable 1
-! ipset test SCANNERS-BLOCK-V4 198.51.100.1 2>/dev/null
+absent SCANNERS-BLOCK-V4 198.51.100.1
 ipset test SCANNERS-BLOCK-V4 192.0.2.1
 run sources enable 1
 
@@ -70,7 +72,7 @@ run update
 ipset test SCANNERS-BLOCK-V4 203.0.113.7
 kill "$server"; wait "$server" 2>/dev/null || true; server=''
 run unban 203.0.113.7
-! ipset test SCANNERS-BLOCK-V4 203.0.113.7 2>/dev/null
+absent SCANNERS-BLOCK-V4 203.0.113.7
 ipset test SCANNERS-BLOCK-V6 2001:db8:ffff::1
 expect_status 1 run unban 203.0.113.7
 python3 -m http.server 18080 --bind 127.0.0.1 --directory "$work/www" > "$work/http.log" 2>&1 &
@@ -108,10 +110,10 @@ ipset test SCANNERS-BLOCK-V4 198.51.100.1
 ipset test SCANNERS-BLOCK-V6 2001:db8:1::1
 
 run sources remove 1
-! ipset test SCANNERS-BLOCK-V4 198.51.100.1 2>/dev/null
+absent SCANNERS-BLOCK-V4 198.51.100.1
 ipset test SCANNERS-BLOCK-V4 203.0.113.1
 ipset test foreign 198.18.0.1
-! ipset list -name | grep -q '^RKN-NEXT'
+if ipset list -name | grep -q '^RKN-NEXT'; then echo 'остался временный набор' >&2; exit 1; fi
 iptables -vnxL SCANNERS-BLOCK > "$work/counters.after"
 cmp "$work/counters.before" "$work/counters.after"
 echo 'Пройдены проверки реального ipset: схлопывание, источники, баны, кеш, ошибки, откат и счётчики.'

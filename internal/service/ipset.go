@@ -29,13 +29,13 @@ func NewIpsetService(logger zerolog.Logger, cmdSvc *CommandService) *IpsetServic
 
 // Restore восстанавливает наборы из файла.
 func (s *IpsetService) Restore(path string) error {
-	s.logger.Info().Str("path", path).Msg("Загрузка конфигурации ipset")
+	s.logger.Debug().Str("path", path).Msg("Загрузка конфигурации ipset")
 
 	if err := s.ipsetCmd.Restore(path); err != nil {
 		return fmt.Errorf("failed to restore ipset: %w", err)
 	}
 
-	s.logger.Info().Str("path", path).Msg("Конфигурация ipset загружена")
+	s.logger.Debug().Str("path", path).Msg("Конфигурация ipset загружена")
 	return nil
 }
 
@@ -45,12 +45,12 @@ func (s *IpsetService) CreateRestoreService() error {
 }
 
 func (s *IpsetService) createRestoreService(path string) error {
-	s.logger.Info().Msg("Создание systemd сервиса для загрузки конфигурации ipset")
+	s.logger.Debug().Msg("Создание systemd сервиса для загрузки конфигурации ipset")
 
 	if err := atomicWriteFile(path, []byte(IpsetRestoreServiceTemplate), 0644); err != nil {
 		return fmt.Errorf("failed to create systemd service: %w", err)
 	}
-	s.logger.Info().Str("path", IpsetRestoreServicePath).Msg("Создан systemd сервис")
+	s.logger.Debug().Str("path", IpsetRestoreServicePath).Msg("Создан systemd сервис")
 
 	// Просим systemd перечитать файлы сервисов.
 	if err := s.cmdSvc.DaemonReload(); err != nil {
@@ -61,8 +61,8 @@ func (s *IpsetService) createRestoreService(path string) error {
 	if err := s.cmdSvc.EnableService("antiscan-ipset-restore.service"); err != nil {
 		return fmt.Errorf("failed to enable service: %w", err)
 	}
-	s.logger.Info().Msg("Сервис systemd успешно включен")
+	s.logger.Debug().Msg("Сервис systemd успешно включен")
 
-	s.logger.Info().Msg("Ipset будет автоматически восстановлен на системном запуске перед запуском UFW")
+	s.logger.Debug().Msg("Ipset будет автоматически восстановлен на системном запуске перед запуском UFW")
 	return nil
 }

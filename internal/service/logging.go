@@ -41,7 +41,7 @@ func (s *LoggingService) Setup() (result error) {
 	if _, err := exec.LookPath("python3"); err != nil {
 		return fmt.Errorf("statistics collector requires python3: %w", err)
 	}
-	s.logger.Info().Msg("Настройка логирования")
+	s.logger.Debug().Msg("Настройка логирования")
 	restore, err := s.backupSettings()
 	if err != nil {
 		return err
@@ -96,11 +96,11 @@ func (s *LoggingService) Setup() (result error) {
 		return fmt.Errorf("failed to setup cron job: %w", err)
 	}
 
-	s.logger.Info().Msg("Конфигурация логирования готова")
-	s.logger.Info().Msg("  Сырые логи: /var/log/iptables-scanners-{ipv4,ipv6}.log")
-	s.logger.Info().Msg("  Агрегированные: /var/log/iptables-scanners-aggregate.csv (с ASN/netname, обновляются каждые 30 сек)")
-	s.logger.Info().Msg("  Rate limit: 10 entries/minute")
-	s.logger.Info().Msg("  Проверить статус: systemctl status antiscan-aggregate.timer")
+	s.logger.Debug().Msg("Конфигурация логирования готова")
+	s.logger.Debug().Msg("  Сырые логи: /var/log/iptables-scanners-{ipv4,ipv6}.log")
+	s.logger.Debug().Msg("  Агрегированные: /var/log/iptables-scanners-aggregate.csv (с ASN/netname, обновляются каждые 30 сек)")
+	s.logger.Debug().Msg("  Rate limit: 10 entries/minute")
+	s.logger.Debug().Msg("  Проверить статус: systemctl status antiscan-aggregate.timer")
 
 	return nil
 }
@@ -151,7 +151,7 @@ func (s *LoggingService) setupRsyslog() error {
 	if err := writeLoggingConfig(s.path(RsyslogConfigPath), []byte(RsyslogConfigTemplate)); err != nil {
 		return err
 	}
-	s.logger.Info().Str("path", s.path(RsyslogConfigPath)).Msg("Конфиг rsyslog создан")
+	s.logger.Debug().Str("path", s.path(RsyslogConfigPath)).Msg("Конфиг rsyslog создан")
 	return nil
 }
 
@@ -180,7 +180,7 @@ func (s *LoggingService) prepareLogFiles(logFiles []string) error {
 				return err
 			}
 
-			s.logger.Info().Str("file", logFile).Msg("Создан лог файл")
+			s.logger.Debug().Str("file", logFile).Msg("Создан лог файл")
 		}
 	}
 
@@ -197,7 +197,7 @@ func (s *LoggingService) setupLogrotate() error {
 		return err
 	}
 
-	s.logger.Info().Str("path", s.path(LogrotateConfigPath)).Msg("Создан logrotate конфиг")
+	s.logger.Debug().Str("path", s.path(LogrotateConfigPath)).Msg("Создан logrotate конфиг")
 	return nil
 }
 
@@ -212,7 +212,7 @@ func (s *LoggingService) setupAggregationScript() error {
 		return fmt.Errorf("failed to make script executable: %w", err)
 	}
 
-	s.logger.Info().Str("path", s.path(AggregateLogsScriptPath)).Msg("Создан скрипт агрегирования логов")
+	s.logger.Debug().Str("path", s.path(AggregateLogsScriptPath)).Msg("Создан скрипт агрегирования логов")
 	return nil
 }
 
@@ -222,13 +222,13 @@ func (s *LoggingService) setupCronJob() error {
 	if err := atomicWriteFile(s.path(AggregateLogsServicePath), []byte(AggregateLogsServiceTemplate), 0644); err != nil {
 		return err
 	}
-	s.logger.Info().Str("path", s.path(AggregateLogsServicePath)).Msg("Создан systemd сервис")
+	s.logger.Debug().Str("path", s.path(AggregateLogsServicePath)).Msg("Создан systemd сервис")
 
 	// Создаём таймер systemd.
 	if err := atomicWriteFile(s.path(AggregateLogsTimerPath), []byte(AggregateLogsTimerTemplate), 0644); err != nil {
 		return err
 	}
-	s.logger.Info().Str("path", s.path(AggregateLogsTimerPath)).Msg("Создан systemd timer")
+	s.logger.Debug().Str("path", s.path(AggregateLogsTimerPath)).Msg("Создан systemd timer")
 
 	// Просим systemd перечитать файлы сервисов.
 	if err := exec.Command("systemctl", "daemon-reload").Run(); err != nil {
@@ -247,7 +247,7 @@ func (s *LoggingService) setupCronJob() error {
 	if err := exec.Command("systemctl", "is-active", "--quiet", "antiscan-aggregate.timer").Run(); err != nil {
 		return err
 	}
-	s.logger.Info().Msg("Systemd timer включен и запущен (каждые 30 секунд)")
+	s.logger.Debug().Msg("Systemd timer включен и запущен (каждые 30 секунд)")
 	return nil
 }
 
@@ -265,7 +265,7 @@ func (s *LoggingService) reloadRsyslog() (bool, error) {
 	if err := exec.Command("systemctl", "is-active", "--quiet", "rsyslog").Run(); err != nil {
 		return true, fmt.Errorf("rsyslog не работает: %w", err)
 	}
-	s.logger.Info().Msg("Rsyslog перезапущен")
+	s.logger.Debug().Msg("Rsyslog перезапущен")
 	return true, nil
 }
 
@@ -282,7 +282,7 @@ func (s *LoggingService) ensureDependencies() error {
 		if _, err := exec.LookPath(dependency.binary); err == nil {
 			continue
 		}
-		s.logger.Info().Str("package", dependency.pkg).Msg("Восстанавливаем зависимость статистики")
+		s.logger.Debug().Str("package", dependency.pkg).Msg("Восстанавливаем зависимость статистики")
 		if err := installer.installPackage(dependency.pkg, getDistroType()); err != nil {
 			return fmt.Errorf("не удалось установить %s, статистика не настроена: %w", dependency.pkg, err)
 		}

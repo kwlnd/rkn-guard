@@ -62,17 +62,18 @@ func droppedPackets(binary string) (uint64, bool) {
 }
 
 func linkedVia(binary string) string {
+	var via []string
 	if exec.Command(binary, "-w", "-C", "INPUT", "-j", "SCANNERS-BLOCK").Run() == nil {
-		return "INPUT"
+		via = append(via, "INPUT")
 	}
 	chain := "ufw-before-input"
 	if binary == "ip6tables" {
 		chain = "ufw6-before-input"
 	}
 	if exec.Command(binary, "-w", "-C", chain, "-j", "SCANNERS-BLOCK").Run() == nil {
-		return "UFW"
+		via = append(via, "UFW")
 	}
-	return ""
+	return strings.Join(via, " + ")
 }
 
 func showStatus() error {

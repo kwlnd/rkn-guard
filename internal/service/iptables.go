@@ -35,13 +35,10 @@ func NewIptablesService(logger zerolog.Logger, cmdSvc *CommandService, enableLog
 func (s *IptablesService) SetupChain() error {
 	s.logger.Debug().Msg("Настройка цепочек iptables")
 
-	// Если UFW активен, напрямую к INPUT не подключаемся:
-	// правила будут вызываться через ufw-before-input.
-	linkToInput := !s.isUFWActive()
-	if !linkToInput {
-		s.logger.Debug().Msg("UFW активен - цепочка подключается через ufw-before-input")
-	}
-	return s.SetupChainLinked(linkToInput)
+	// Переход из INPUT ставим первым правилом и при активном UFW: другие
+	// скрипты часто добавляют в INPUT свои ACCEPT до цепочек UFW, и тогда
+	// сканеры на открытых портах не доходили бы до ufw-before-input.
+	return s.SetupChainLinked(true)
 }
 
 // SetupChainLinked настраивает цепочки; linkToInput добавляет переход из INPUT.
@@ -135,7 +132,7 @@ func (s *IptablesService) setupVersionChain(version IPVersion, ipsetName string,
 // кроме разрешённых в UFW. Без UFW правила при загрузке поднимает rkn-guard restore.
 func (s *IptablesService) Save() error {
 	if s.isUFWActive() {
-		s.logger.Info().Msg("UFW активен: правила записываются в before.rules")
+		s.logger.Info().Msg("UFW активен: правила добавлены и в его before.rules")
 		return s.saveWithUFW()
 	}
 	// Старые установки сохраняли цепочки через netfilter-persistent; держим их файлы актуальными.
@@ -240,7 +237,7 @@ func (s *IptablesService) saveWithUFW() (result error) {
 	// Удаляем старый managed блок если существует (для поддержки обновлений)
 	contentV4Str := string(contentV4)
 	if strings.Contains(contentV4Str, markerV4) {
-		s.logger.Info().Msg("Обнаружен существующий блок SCANNERS-BLOCK в before.rules, обновляем...")
+		s.logger.Debug().Msg("Обнаружен существующий блок SCANNERS-BLOCK в before.rules, обновляем...")
 		contentV4Str = s.removeManagedBlock(contentV4Str, markerV4)
 	}
 
@@ -287,13 +284,13 @@ func (s *IptablesService) saveWithUFW() (result error) {
 	if err := atomicWriteFile(beforeRulesV4, []byte(newContent), infoV4.Mode().Perm()); err != nil {
 		return fmt.Errorf("failed to write UFW rules: %w", err)
 	}
-	s.logger.Info().Msg("Обновлён UFW before.rules для IPv4")
+	s.logger.Debug().Msg("Обновлён UFW before.rules для IPv4")
 
 	if contentV6 != nil {
 		// Удаляем старый managed блок если существует (для поддержки обновлений)
 		contentV6Str := string(contentV6)
 		if strings.Contains(contentV6Str, markerV6) {
-			s.logger.Info().Msg("Обнаружен существующий блок SCANNERS-BLOCK в before6.rules, обновляем...")
+			s.logger.Debug().Msg("Обнаружен существующий блок SCANNERS-BLOCK в before6.rules, обновляем...")
 			contentV6Str = s.removeManagedBlock(contentV6Str, markerV6)
 		}
 
@@ -364,7 +361,7 @@ func (s *IptablesService) saveWithUFW() (result error) {
 
 	// Порядок уже записан в before-файлах, отдельный сервис для перестановки не нужен.
 
-	s.logger.Info().Msg("Правила iptables интегрированы с UFW")
+	s.logger.Debug().Msg("Правила iptables интегрированы с UFW")
 	return nil
 }
 

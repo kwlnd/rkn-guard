@@ -25,7 +25,7 @@ func NewInstallerService(logger zerolog.Logger) *InstallerService {
 
 // EnsureDependencies проверяет и устанавливает зависимости.
 func (s *InstallerService) EnsureDependencies() error {
-	s.logger.Info().Msg("Проверка зависимостей")
+	s.logger.Debug().Msg("Проверка зависимостей")
 
 	distro := getDistroType()
 	s.logger.Debug().Str("distro", distro).Msg("Detected distribution")
@@ -83,7 +83,7 @@ func (s *InstallerService) EnsureDependencies() error {
 		s.logger.Debug().Msg("ipset уже установлен")
 	}
 
-	s.logger.Info().Msg("Все зависимости удовлетворены")
+	s.logger.Debug().Msg("Все зависимости удовлетворены")
 	return nil
 }
 

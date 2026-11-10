@@ -65,6 +65,9 @@ func httpGet(ctx context.Context, url string, limit int64) ([]byte, error) {
 // LatestRelease спрашивает у GitHub последний стабильный релиз.
 func LatestRelease(ctx context.Context, repo string) (Release, error) {
 	data, err := httpGet(ctx, "https://api.github.com/repos/"+repo+"/releases/latest", 1<<20)
+	if err != nil && strings.HasSuffix(err.Error(), "HTTP 404") {
+		return Release{}, fmt.Errorf("в github.com/%s ещё нет опубликованных релизов", repo)
+	}
 	if err != nil {
 		return Release{}, fmt.Errorf("не удалось узнать последний релиз: %w", err)
 	}
