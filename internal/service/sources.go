@@ -324,8 +324,52 @@ func (s *SourceStore) Download(base []string) (*domain.NetworkList, []string, er
 		}
 		return nil, warnings, ErrNoSourceData
 	}
+	combined = CollapseNetworks(combined)
 	if combined.IPv4Count() > 65536 || combined.IPv6Count() > 65536 {
 		return nil, warnings, fmt.Errorf("общий список превышает 65536 подсетей на семейство; текущие наборы сохранены")
 	}
 	return combined, warnings, nil
+}
+
+// Cached собирает включённые источники из сохранённых копий, без загрузки.
+// Нужен, чтобы пересобрать наборы после изменения ручных блокировок.
+func (s *SourceStore) Cached(base []string) (*domain.NetworkList, error) {
+	state, err := s.Load()
+	if err != nil {
+		return nil, err
+	}
+	var urls []string
+	seen := map[string]bool{}
+	for _, raw := range base {
+		normal, err := NormalizeSourceURL(raw)
+		if err != nil || seen[normal] {
+			continue
+		}
+		seen[normal] = true
+		if !state.DisabledBase[normal] {
+			urls = append(urls, normal)
+		}
+	}
+	for _, source := range state.Extra {
+		if source.Enabled && !seen[source.URL] {
+			seen[source.URL] = true
+			urls = append(urls, source.URL)
+		}
+	}
+	combined := domain.NewNetworkList()
+	found := false
+	for _, url := range urls {
+		cache, ok := state.Cache[url]
+		if !ok || len(cache.Networks) == 0 {
+			continue
+		}
+		found = true
+		for _, subnet := range cache.Networks {
+			combined.Add(subnet, isIPv6Subnet(subnet))
+		}
+	}
+	if !found && len(urls) > 0 {
+		return nil, fmt.Errorf("нет сохранённых копий списков; выполните rkn-guard update")
+	}
+	return CollapseNetworks(combined), nil
 }

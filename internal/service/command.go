@@ -33,7 +33,7 @@ func (s *CommandService) Run(name string, args ...string) error {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		s.logger.Error().
+		s.logger.Debug().
 			Err(err).
 			Str("command", name).
 			Strs("args", args).
@@ -55,7 +55,7 @@ func (s *CommandService) RunOutput(name string, args ...string) (string, error) 
 	cmd := exec.Command(name, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		s.logger.Error().
+		s.logger.Debug().
 			Err(err).
 			Str("command", name).
 			Strs("args", args).
@@ -65,6 +65,19 @@ func (s *CommandService) RunOutput(name string, args ...string) (string, error) 
 	}
 
 	return string(output), nil
+}
+
+// RunInput запускает команду, передавая данные на стандартный ввод.
+func (s *CommandService) RunInput(input string, name string, args ...string) error {
+	s.logger.Debug().Str("command", name).Strs("args", args).Int("stdin_bytes", len(input)).Msg("Executing command with input")
+	cmd := exec.Command(name, args...)
+	cmd.Stdin = strings.NewReader(input)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("command '%s %s' failed: %w: %s", name, strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
+	}
+	return nil
 }
 
 // RunQuiet не пишет ошибки в журнал; это удобно для проверок наличия.
@@ -141,7 +154,7 @@ func (s *CommandService) IsServiceEnabled(serviceName string) bool {
 
 // EnableService включает автозапуск сервиса.
 func (s *CommandService) EnableService(serviceName string) error {
-	s.logger.Info().
+	s.logger.Debug().
 		Str("service", serviceName).
 		Msg("Enabling service")
 
@@ -150,7 +163,7 @@ func (s *CommandService) EnableService(serviceName string) error {
 
 // StartService запускает сервис.
 func (s *CommandService) StartService(serviceName string) error {
-	s.logger.Info().
+	s.logger.Debug().
 		Str("service", serviceName).
 		Msg("Starting service")
 
@@ -159,7 +172,7 @@ func (s *CommandService) StartService(serviceName string) error {
 
 // StopService останавливает сервис.
 func (s *CommandService) StopService(serviceName string) error {
-	s.logger.Info().
+	s.logger.Debug().
 		Str("service", serviceName).
 		Msg("Stopping service")
 
@@ -168,7 +181,7 @@ func (s *CommandService) StopService(serviceName string) error {
 
 // DisableService отключает автозапуск сервиса.
 func (s *CommandService) DisableService(serviceName string) error {
-	s.logger.Info().
+	s.logger.Debug().
 		Str("service", serviceName).
 		Msg("Disabling service")
 
@@ -177,7 +190,7 @@ func (s *CommandService) DisableService(serviceName string) error {
 
 // RestartService перезапускает сервис.
 func (s *CommandService) RestartService(serviceName string) error {
-	s.logger.Info().
+	s.logger.Debug().
 		Str("service", serviceName).
 		Msg("Restarting service")
 
@@ -186,7 +199,7 @@ func (s *CommandService) RestartService(serviceName string) error {
 
 // ReloadService просит сервис перечитать настройки.
 func (s *CommandService) ReloadService(serviceName string) error {
-	s.logger.Info().
+	s.logger.Debug().
 		Str("service", serviceName).
 		Msg("Reloading service")
 
@@ -195,7 +208,7 @@ func (s *CommandService) ReloadService(serviceName string) error {
 
 // DaemonReload просит systemd перечитать файлы сервисов.
 func (s *CommandService) DaemonReload() error {
-	s.logger.Info().Msg("Reloading systemd daemon")
+	s.logger.Debug().Msg("Reloading systemd daemon")
 	return s.Run("systemctl", "daemon-reload")
 }
 

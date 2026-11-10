@@ -1,9 +1,10 @@
 package logger
 
 import (
+	"fmt"
 	"os"
-	"time"
 
+	"github.com/mattn/go-isatty"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -13,57 +14,46 @@ type Logger struct {
 	zerolog.Logger
 }
 
-// New создаёт журнал с читаемым выводом в консоль.
-func New() *Logger {
-	output := zerolog.ConsoleWriter{
-		Out:        os.Stderr,
-		TimeFormat: time.RFC3339,
-		NoColor:    false,
+// ColorEnabled сообщает, можно ли красить вывод в файл f.
+func ColorEnabled(f *os.File) bool {
+	if _, ok := os.LookupEnv("NO_COLOR"); ok || os.Getenv("TERM") == "dumb" {
+		return false
 	}
-
-	logger := zerolog.New(output).
-		With().
-		Timestamp().
-		Logger()
-
-	return &Logger{logger}
+	return isatty.IsTerminal(f.Fd())
 }
 
-// NewWithLevel создаёт журнал с указанным уровнем сообщений.
-func NewWithLevel(level string) *Logger {
-	output := zerolog.ConsoleWriter{
-		Out:        os.Stderr,
-		TimeFormat: time.RFC3339,
-		NoColor:    false,
+// New создаёт журнал для человека: без меток времени, с короткой меткой уровня.
+// verbose включает отладочные сообщения и полное время.
+func New(verbose bool) *Logger {
+	color := ColorEnabled(os.Stderr)
+	paint := func(code, text string) string {
+		if !color {
+			return text
+		}
+		return "\033[" + code + "m" + text + "\033[0m"
 	}
-
-	logLevel := parseLevel(level)
-
-	logger := zerolog.New(output).
-		Level(logLevel).
-		With().
-		Timestamp().
-		Logger()
-
-	return &Logger{logger}
-}
-
-// parseLevel преобразует название уровня в значение zerolog.
-func parseLevel(level string) zerolog.Level {
-	switch level {
-	case "debug":
-		return zerolog.DebugLevel
-	case "info":
-		return zerolog.InfoLevel
-	case "warn", "warning":
-		return zerolog.WarnLevel
-	case "error":
-		return zerolog.ErrorLevel
-	case "fatal":
-		return zerolog.FatalLevel
-	default:
-		return zerolog.InfoLevel
+	output := zerolog.ConsoleWriter{Out: os.Stderr, NoColor: !color}
+	if verbose {
+		output.TimeFormat = "15:04:05.000"
+	} else {
+		output.PartsExclude = []string{zerolog.TimestampFieldName}
 	}
+	output.FormatLevel = func(i interface{}) string {
+		switch fmt.Sprint(i) {
+		case "debug", "trace":
+			return paint("90", "·")
+		case "warn":
+			return paint("33", "!")
+		case "error", "fatal", "panic":
+			return paint("31", "✗")
+		}
+		return paint("36", "•")
+	}
+	level := zerolog.InfoLevel
+	if verbose {
+		level = zerolog.DebugLevel
+	}
+	return &Logger{zerolog.New(output).Level(level).With().Timestamp().Logger()}
 }
 
 // SetGlobalLogger задаёт общий журнал приложения.

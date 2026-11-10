@@ -37,13 +37,13 @@ func (d *Downloader) Download(urls []string) (*domain.NetworkList, error) {
 	if len(urls) == 0 {
 		return nil, fmt.Errorf("no list URLs supplied")
 	}
-	d.logger.Info().Int("url_count", len(urls)).Msg("Началась загрузка списков подсетей")
+	d.logger.Debug().Int("url_count", len(urls)).Msg("Началась загрузка списков подсетей")
 
 	networks := domain.NewNetworkList()
 	seenSubnets := make(map[string]bool)
 
 	for i, url := range urls {
-		d.logger.Info().
+		d.logger.Debug().
 			Int("index", i+1).
 			Int("total", len(urls)).
 			Str("url", url).
@@ -70,8 +70,9 @@ func (d *Downloader) Download(urls []string) (*domain.NetworkList, error) {
 			}
 			added++
 		}
-		d.logger.Info().Int("added", added).Str("url", url).Msg("Загрузка списка подсетей завершена")
+		d.logger.Debug().Int("added", added).Str("url", url).Msg("Загрузка списка подсетей завершена")
 	}
+	networks = CollapseNetworks(networks)
 	d.logger.Info().Int("total", networks.TotalCount()).Msg("Загрузка завершена")
 	return networks, nil
 }

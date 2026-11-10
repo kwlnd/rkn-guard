@@ -11,7 +11,7 @@ import (
 
 type setCommands interface {
 	CreateHashNet(string, Family, int, int) error
-	Add(string, string) error
+	AddAll(string, []string) error
 	Exists(string) bool
 	Swap(string, string) error
 	Destroy(string) error
@@ -75,10 +75,8 @@ func replaceSetsChecked(cmd setCommands, networks *domain.NetworkList, persist f
 			return err
 		}
 		set.staged = true
-		for _, entry := range set.entries {
-			if err := cmd.Add(set.temp, entry); err != nil {
-				return fmt.Errorf("stage %s: %w", entry, err)
-			}
+		if err := cmd.AddAll(set.temp, set.entries); err != nil {
+			return fmt.Errorf("заполнение %s: %w", set.temp, err)
 		}
 	}
 	for i := range sets {

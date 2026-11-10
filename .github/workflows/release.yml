@@ -29,19 +29,19 @@ jobs:
           mkdir -p dist
           VERSION=${GITHUB_REF_NAME}
           BUILD_BRANCH=master
-          LDFLAGS="-X main.version=${VERSION} -X main.branch=${BUILD_BRANCH}"
+          LDFLAGS="-s -w -X main.version=${VERSION} -X main.branch=${BUILD_BRANCH} -X main.repo=${GITHUB_REPOSITORY}"
 
           # Сборка для Linux на AMD64.
-          GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/rkn-guard-linux-amd64 ./cmd
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/rkn-guard-linux-amd64 ./cmd
 
           # Сборка для Linux на ARM64.
-          GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/rkn-guard-linux-arm64 ./cmd
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/rkn-guard-linux-arm64 ./cmd
 
           # Сборка для Linux на ARM.
-          GOOS=linux GOARCH=arm go build -ldflags="${LDFLAGS}" -o dist/rkn-guard-linux-arm ./cmd
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm go build -ldflags="${LDFLAGS}" -o dist/rkn-guard-linux-arm ./cmd
 
           # Сборка для Linux на 386.
-          GOOS=linux GOARCH=386 go build -ldflags="${LDFLAGS}" -o dist/rkn-guard-linux-386 ./cmd
+          CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -ldflags="${LDFLAGS}" -o dist/rkn-guard-linux-386 ./cmd
 
       - name: Create checksums
         run: |

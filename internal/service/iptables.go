@@ -33,14 +33,19 @@ func NewIptablesService(logger zerolog.Logger, cmdSvc *CommandService, enableLog
 
 // SetupChain создаёт цепочки и добавляет правила.
 func (s *IptablesService) SetupChain() error {
-	s.logger.Info().Msg("Настройка цепочек iptables")
+	s.logger.Debug().Msg("Настройка цепочек iptables")
 
 	// Если UFW активен, напрямую к INPUT не подключаемся:
 	// правила будут вызываться через ufw-before-input.
 	linkToInput := !s.isUFWActive()
 	if !linkToInput {
-		s.logger.Info().Msg("UFW обнаружен - правила будут добавлены в ufw-before-input")
+		s.logger.Debug().Msg("UFW активен - цепочка подключается через ufw-before-input")
 	}
+	return s.SetupChainLinked(linkToInput)
+}
+
+// SetupChainLinked настраивает цепочки; linkToInput добавляет переход из INPUT.
+func (s *IptablesService) SetupChainLinked(linkToInput bool) error {
 
 	// Настраиваем IPv4.
 	if err := s.setupVersionChain(IPv4, ipsetV4Name, linkToInput); err != nil {
@@ -52,7 +57,7 @@ func (s *IptablesService) SetupChain() error {
 		return fmt.Errorf("failed to setup IPv6 chain: %w", err)
 	}
 
-	s.logger.Info().Msg("Цепочки iptables настроены")
+	s.logger.Debug().Msg("Цепочки iptables настроены")
 	return nil
 }
 
@@ -63,7 +68,7 @@ func (s *IptablesService) setupVersionChain(version IPVersion, ipsetName string,
 	// Проверяем, существует ли цепочка.
 	// При повторной установке добавляем недостающие правила, не снимая защиту.
 	if !s.iptablesCmd.ChainExists(version, TableFilter, chainName) {
-		s.logger.Info().Str("chain", chainName).Str("version", string(version)).Msg("Создание цепочки")
+		s.logger.Debug().Str("chain", chainName).Str("version", string(version)).Msg("Создание цепочки")
 		if err := s.iptablesCmd.CreateChain(version, TableFilter, chainName); err != nil {
 			return fmt.Errorf("failed to create chain: %w", err)
 		}
@@ -72,7 +77,7 @@ func (s *IptablesService) setupVersionChain(version IPVersion, ipsetName string,
 	// Без UFW подключаем нашу цепочку напрямую к INPUT.
 	if linkToInput {
 		if !s.iptablesCmd.RuleExists(version, TableFilter, string(ChainInput), []string{"-j", chainName}) {
-			s.logger.Info().Str("version", string(version)).Msg("Привязка цепочки к INPUT")
+			s.logger.Debug().Str("version", string(version)).Msg("Привязка цепочки к INPUT")
 			if err := s.iptablesCmd.LinkChainToInput(version, chainName, 1); err != nil {
 				return fmt.Errorf("failed to link chain to INPUT: %w", err)
 			}
@@ -85,7 +90,7 @@ func (s *IptablesService) setupVersionChain(version IPVersion, ipsetName string,
 		Jump(TargetReturn).
 		Build()
 	if !s.iptablesCmd.RuleExists(version, TableFilter, chainName, establishedRule) {
-		s.logger.Info().Str("version", string(version)).Msg("Добавление правила для установленных соединений")
+		s.logger.Debug().Str("version", string(version)).Msg("Добавление правила для установленных соединений")
 		if err := s.iptablesCmd.InsertRule(version, TableFilter, chainName, 1, establishedRule); err != nil {
 			return fmt.Errorf("failed to add ESTABLISHED rule: %w", err)
 		}
@@ -106,7 +111,7 @@ func (s *IptablesService) setupVersionChain(version IPVersion, ipsetName string,
 			LogLevel("4").
 			Build()
 		if !s.iptablesCmd.RuleExists(version, TableFilter, chainName, logRule) {
-			s.logger.Info().Str("version", string(version)).Msg("Добавление правила логирования")
+			s.logger.Debug().Str("version", string(version)).Msg("Добавление правила логирования")
 			if err := s.iptablesCmd.InsertRule(version, TableFilter, chainName, 2, logRule); err != nil {
 				return fmt.Errorf("failed to add LOG rule: %w", err)
 			}
@@ -116,7 +121,7 @@ func (s *IptablesService) setupVersionChain(version IPVersion, ipsetName string,
 	// Ставим DROP после правил ESTABLISHED и LOG.
 	dropRule := NewRuleBuilder().MatchSet(ipsetName, "src").Jump(TargetDrop).Build()
 	if !s.iptablesCmd.RuleExists(version, TableFilter, chainName, dropRule) {
-		s.logger.Info().Str("version", string(version)).Msg("Добавление правила блокировки")
+		s.logger.Debug().Str("version", string(version)).Msg("Добавление правила блокировки")
 		if err := s.iptablesCmd.AppendRule(version, TableFilter, chainName, dropRule); err != nil {
 			return fmt.Errorf("failed to add DROP rule: %w", err)
 		}
@@ -125,23 +130,19 @@ func (s *IptablesService) setupVersionChain(version IPVersion, ipsetName string,
 	return nil
 }
 
-// Save сохраняет правила доступным в системе способом.
+// Save делает правила постоянными. Активный UFW получает наш блок в before.rules.
+// Выключенный UFW rkn-guard не включает: на сервере это закрыло бы все порты,
+// кроме разрешённых в UFW. Без UFW правила при загрузке поднимает rkn-guard restore.
 func (s *IptablesService) Save() error {
-	s.logger.Info().Msg("Сохранение правил iptables")
-
-	// Если UFW установлен, используем его, даже если он пока выключен.
-	if s.cmdSvc.CommandExists("ufw") {
-		s.logger.Info().Msg("UFW обнаружен - интеграция с UFW")
+	if s.isUFWActive() {
+		s.logger.Info().Msg("UFW активен: правила записываются в before.rules")
 		return s.saveWithUFW()
 	}
-
-	// Без UFW используем netfilter-persistent, установленный вместе с зависимостями.
-	if !s.cmdSvc.CommandExists("netfilter-persistent") {
-		return fmt.Errorf("netfilter-persistent не установлен. Запустите установку зависимостей")
+	// Старые установки сохраняли цепочки через netfilter-persistent; держим их файлы актуальными.
+	if s.cmdSvc.CommandExists("netfilter-persistent") {
+		return s.saveWithNetfilterPersistent()
 	}
-
-	s.logger.Info().Msg("Использование netfilter-persistent")
-	return s.saveWithNetfilterPersistent()
+	return nil
 }
 
 // isUFWActive проверяет наличие и состояние UFW.
@@ -188,79 +189,13 @@ func (s *IptablesService) isUFWActive() bool {
 
 // saveWithUFW сохраняет и применяет правила через UFW.
 func (s *IptablesService) saveWithUFW() (result error) {
-	// Перед включением UFW обязательно проверяем доступ по SSH.
-	// Иначе можно потерять доступ к серверу, где UFW пока выключен.
 	status, err := s.cmdSvc.RunOutput("ufw", "status")
 	if err != nil {
 		return fmt.Errorf("cannot query UFW: %w", err)
 	}
 	wasActive := strings.Contains(status, "Status: active")
 	if !wasActive {
-		s.logger.Warn().Msg("⚠️  UFW установлен но неактивен - проверка правил SSH перед включением")
-
-		// Ищем правило SSH в user.rules и user6.rules.
-		hasSSH := false
-
-		// Сначала проверяем user.rules.
-		if content, err := os.ReadFile("/etc/ufw/user.rules"); err == nil {
-			rules := string(content)
-			if strings.Contains(rules, "dport 22") || strings.Contains(rules, "dport ssh") {
-				hasSSH = true
-			}
-		}
-
-		// Затем проверяем user6.rules.
-		if !hasSSH {
-			if content, err := os.ReadFile("/etc/ufw/user6.rules"); err == nil {
-				rules := string(content)
-				if strings.Contains(rules, "dport 22") || strings.Contains(rules, "dport ssh") {
-					hasSSH = true
-				}
-			}
-		}
-
-		// Дополнительно проверяем правила через команду UFW.
-		if !hasSSH {
-			if output, err := s.cmdSvc.RunOutput("ufw", "show", "added"); err == nil {
-				if strings.Contains(output, "22/tcp") || strings.Contains(output, "22") || strings.Contains(output, "OpenSSH") || strings.Contains(output, "ssh") {
-					hasSSH = true
-				}
-			}
-		}
-
-		if !hasSSH {
-			s.logger.Error().Msg("╔════════════════════════════════════════════════════════════╗")
-			s.logger.Error().Msg("║  ⚠️  КРИТИЧЕСКАЯ ОШИБКА - ПРЕДОТВРАЩЕНИЕ БЛОКИРОВКИ  ⚠️    ║")
-			s.logger.Error().Msg("╚════════════════════════════════════════════════════════════╝")
-			s.logger.Error().Msg("")
-			s.logger.Error().Msg("UFW установлен но НЕ имеет правил для SSH!")
-			s.logger.Error().Msg("Включение UFW БЕЗ правил SSH ЗАБЛОКИРУЕТ удалённый доступ к серверу!")
-			s.logger.Error().Msg("")
-			s.logger.Error().Msg("═══ ШАГ 1: Разрешите SSH в UFW ═══")
-			s.logger.Error().Msg("")
-			s.logger.Error().Msg("Выполните ОДНУ из команд:")
-			s.logger.Error().Msg("  sudo ufw allow 22/tcp     # Разрешить TCP порт 22")
-			s.logger.Error().Msg("  sudo ufw allow OpenSSH    # Разрешить OpenSSH (рекомендуется)")
-			s.logger.Error().Msg("  sudo ufw allow ssh        # Разрешить SSH сервис")
-			s.logger.Error().Msg("")
-			s.logger.Error().Msg("Проверьте правило:")
-			s.logger.Error().Msg("  sudo ufw show added")
-			s.logger.Error().Msg("")
-			s.logger.Error().Msg("═══ ШАГ 2: Повторите установку rkn-guard ═══")
-			s.logger.Error().Msg("")
-			s.logger.Error().Msg("  sudo rkn-guard full")
-			s.logger.Error().Msg("")
-			s.logger.Error().Msg("═══ АЛЬТЕРНАТИВА: Удалить UFW ═══")
-			s.logger.Error().Msg("")
-			s.logger.Error().Msg("Если UFW не нужен:")
-			s.logger.Error().Msg("  sudo apt remove --purge ufw")
-			s.logger.Error().Msg("")
-			s.logger.Error().Msg("antiscan будет работать с iptables напрямую")
-			s.logger.Error().Msg("")
-			return fmt.Errorf("SSH not allowed in UFW - installation aborted to prevent server lockout")
-		}
-
-		s.logger.Info().Msg("✓ Правило SSH найдено в конфигурации UFW")
+		return fmt.Errorf("UFW не активен; rkn-guard его не включает")
 	}
 
 	// UFW сохраняет правила автоматически
@@ -433,29 +368,6 @@ func (s *IptablesService) saveWithUFW() (result error) {
 	return nil
 }
 
-// createMoveRuleService создаёт старый сервис перестановки правил после запуска UFW.
-func (s *IptablesService) createMoveRuleService() error {
-	s.logger.Info().Msg("Создание systemd сервиса для поддержания SCANNERS-BLOCK на позиции 1")
-
-	if err := os.WriteFile(MoveRulesServicePath, []byte(MoveRulesServiceTemplate), 0644); err != nil {
-		return fmt.Errorf("failed to create systemd service: %w", err)
-	}
-	s.logger.Info().Str("path", MoveRulesServicePath).Msg("Создан systemd сервис")
-
-	// Просим systemd перечитать файлы сервисов.
-	if err := s.cmdSvc.DaemonReload(); err != nil {
-		s.logger.Warn().Err(err).Msg("Не удалось перезагрузить systemd daemon")
-	}
-
-	// Включаем автозапуск сервиса.
-	if err := s.cmdSvc.EnableService("antiscan-move-rules.service"); err != nil {
-		return fmt.Errorf("failed to enable service: %w", err)
-	}
-	s.logger.Info().Msg("Systemd сервис включён - SCANNERS-BLOCK будет на позиции 1 после перезагрузки")
-
-	return nil
-}
-
 // saveWithNetfilterPersistent сохраняет правила через netfilter-persistent.
 func (s *IptablesService) saveWithNetfilterPersistent() error {
 	// Создаем директорию если не существует
@@ -466,16 +378,16 @@ func (s *IptablesService) saveWithNetfilterPersistent() error {
 	if err := s.iptablesCmd.Save(IPv4, "/etc/iptables/rules.v4"); err != nil {
 		return fmt.Errorf("failed to save iptables: %w", err)
 	}
-	s.logger.Info().Msg("Правила IPv4 сохранены в /etc/iptables/rules.v4")
+	s.logger.Debug().Msg("Правила IPv4 сохранены в /etc/iptables/rules.v4")
 
 	if err := s.iptablesCmd.Save(IPv6, "/etc/iptables/rules.v6"); err != nil {
 		return fmt.Errorf("failed to save ip6tables: %w", err)
 	}
-	s.logger.Info().Msg("Правила IPv6 сохранены в /etc/iptables/rules.v6")
+	s.logger.Debug().Msg("Правила IPv6 сохранены в /etc/iptables/rules.v6")
 
 	// Применяем через netfilter-persistent
 	if err := s.cmdSvc.Run("netfilter-persistent", "save"); err != nil {
-		s.logger.Warn().Err(err).Msg("netfilter-persistent save failed")
+		s.logger.Warn().Err(err).Msg("netfilter-persistent save не сработал")
 	}
 
 	return nil

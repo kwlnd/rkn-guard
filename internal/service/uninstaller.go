@@ -34,36 +34,33 @@ func NewUninstallerService(logger zerolog.Logger, cmdSvc *CommandService) *Unins
 
 // Uninstall удаляет файлы rkn-guard и восстанавливает настройки firewall.
 func (s *UninstallerService) Uninstall(removeLogs bool) error {
-	s.logger.Info().Msg("=== Uninstall rkn-guard ===")
-	s.logger.Info().Msg("rkn-guard does not modify Linux routing tables (ip rule/ip route), skipping routing rollback")
 
 	s.stopAndDisableServices()
 	s.cleanupIPTablesRuntime()
 	if err := s.cleanupUFWBeforeRules(); err != nil {
-		s.logger.Warn().Err(err).Msg("Failed to cleanup UFW before.rules markers")
+		s.logger.Warn().Err(err).Msg("Не удалось убрать блок rkn-guard из before.rules")
 	}
 	s.cleanupIPSet()
 	s.removeArtifacts(removeLogs)
 
 	if err := s.reloadSystemdDaemon(); err != nil {
-		s.logger.Warn().Err(err).Msg("Failed to reload systemd daemon")
+		s.logger.Warn().Err(err).Msg("Не удалось перечитать юниты systemd")
 	}
 
 	if err := s.reloadRsyslog(); err != nil {
-		s.logger.Warn().Err(err).Msg("Failed to reload rsyslog")
+		s.logger.Warn().Err(err).Msg("Не удалось перезапустить rsyslog")
 	}
 
 	if err := s.persistFirewallState(); err != nil {
-		return fmt.Errorf("failed to persist firewall state: %w", err)
+		return fmt.Errorf("не удалось сохранить состояние firewall: %w", err)
 	}
 
-	s.logger.Info().Msg("rkn-guard uninstall completed")
 	return nil
 }
 
 func (s *UninstallerService) stopAndDisableServices() {
 	if !s.cmdSvc.CommandExists("systemctl") {
-		s.logger.Warn().Msg("systemctl not found, skipping service stop/disable")
+		s.logger.Debug().Msg("systemctl not found, skipping service stop/disable")
 		return
 	}
 
@@ -78,10 +75,10 @@ func (s *UninstallerService) stopAndDisableServices() {
 
 	for _, serviceName := range services {
 		if err := s.cmdSvc.StopService(serviceName); err != nil {
-			s.logger.Warn().Err(err).Str("service", serviceName).Msg("Stop failed, continuing")
+			s.logger.Debug().Err(err).Str("service", serviceName).Msg("Stop failed, continuing")
 		}
 		if err := s.cmdSvc.DisableService(serviceName); err != nil {
-			s.logger.Warn().Err(err).Str("service", serviceName).Msg("Disable failed, continuing")
+			s.logger.Debug().Err(err).Str("service", serviceName).Msg("Disable failed, continuing")
 		}
 	}
 }
@@ -93,11 +90,11 @@ func (s *UninstallerService) cleanupIPTablesRuntime() {
 
 func (s *UninstallerService) cleanupIPTablesVersion(version IPVersion, ufwInputChain, command string) {
 	if err := s.iptablesCmd.UnlinkChainFromInput(version, chainName); err != nil {
-		s.logger.Warn().Err(err).Str("version", string(version)).Msg("Failed to unlink chain from INPUT, continuing")
+		s.logger.Debug().Err(err).Str("version", string(version)).Msg("Failed to unlink chain from INPUT, continuing")
 	}
 
 	if err := s.cmdSvc.Run(command, "-D", ufwInputChain, "-j", chainName); err != nil {
-		s.logger.Warn().Err(err).Str("version", string(version)).Msg("Failed to unlink chain from UFW input, continuing")
+		s.logger.Debug().Err(err).Str("version", string(version)).Msg("Failed to unlink chain from UFW input, continuing")
 	}
 
 	if !s.iptablesCmd.ChainExists(version, TableFilter, chainName) {
@@ -180,7 +177,7 @@ func (s *UninstallerService) removeManagedUFWBlock(path string) (bool, error) {
 		return false, fmt.Errorf("failed to replace %s: %w", path, err)
 	}
 
-	s.logger.Info().Str("path", path).Int("blocks", blocksRemoved).Msg("Removed rkn-guard managed UFW blocks")
+	s.logger.Info().Str("path", path).Int("blocks", blocksRemoved).Msg("Убран блок rkn-guard из правил UFW")
 	return true, nil
 }
 
@@ -213,6 +210,7 @@ func (s *UninstallerService) removeArtifacts(removeLogs bool) {
 		AggregateLogsServicePath,
 		AggregateLogsTimerPath,
 		AggregateLogsScriptPath,
+		legacyManagerPath,
 		RsyslogConfigPath,
 		LogrotateConfigPath,
 	}
@@ -266,12 +264,11 @@ func (s *UninstallerService) reloadRsyslog() error {
 }
 
 func (s *UninstallerService) persistFirewallState() error {
-	if s.cmdSvc.CommandExists("ufw") {
-		s.logger.Debug().Msg("UFW detected, skipping manual iptables persistence")
+	if !s.cmdSvc.CommandExists("netfilter-persistent") {
 		return nil
 	}
 
-	s.logger.Info().Msg("Persisting firewall state to /etc/iptables/")
+	s.logger.Debug().Msg("Persisting firewall state to /etc/iptables/")
 
 	if err := os.MkdirAll("/etc/iptables", 0755); err != nil {
 		return err

@@ -69,11 +69,11 @@ func (f *fakeSets) CreateHashNet(n string, _ Family, _, _ int) error {
 	return nil
 }
 func (f *fakeSets) Exists(n string) bool { _, ok := f.sets[n]; return ok }
-func (f *fakeSets) Add(n, e string) error {
+func (f *fakeSets) AddAll(n string, e []string) error {
 	if f.failAdd {
 		return errors.New("add failed")
 	}
-	f.sets[n] = append(f.sets[n], e)
+	f.sets[n] = append(f.sets[n], e...)
 	return nil
 }
 func (f *fakeSets) Swap(a, b string) error {

@@ -100,6 +100,22 @@ func (s *IpsetCommandService) Add(setName, entry string) error {
 	return s.cmdSvc.Run("ipset", "add", setName, entry)
 }
 
+// AddAll добавляет записи одним вызовом ipset restore вместо процесса на каждую подсеть.
+func (s *IpsetCommandService) AddAll(setName string, entries []string) error {
+	if len(entries) == 0 {
+		return nil
+	}
+	var input strings.Builder
+	for _, entry := range entries {
+		input.WriteString("add ")
+		input.WriteString(setName)
+		input.WriteByte(' ')
+		input.WriteString(entry)
+		input.WriteByte('\n')
+	}
+	return s.cmdSvc.RunInput(input.String(), "ipset", "restore", "-exist")
+}
+
 // AddWithTimeout добавляет запись с ограниченным сроком действия.
 func (s *IpsetCommandService) AddWithTimeout(setName, entry string, timeout int) error {
 	return s.cmdSvc.Run("ipset", "add", setName, entry, "timeout", fmt.Sprintf("%d", timeout))
@@ -152,13 +168,13 @@ func (s *IpsetCommandService) Snapshot(name string) (string, error) {
 }
 
 func (s *IpsetCommandService) Save(path string) error {
-	s.logger.Info().Str("path", path).Msg("Saving ipset configuration")
+	s.logger.Debug().Str("path", path).Msg("Saving ipset configuration")
 	return s.cmdSvc.RunShell(fmt.Sprintf("ipset save > %s", path))
 }
 
 // SaveSet сохраняет выбранный набор в файл.
 func (s *IpsetCommandService) SaveSet(name, path string) error {
-	s.logger.Info().
+	s.logger.Debug().
 		Str("name", name).
 		Str("path", path).
 		Msg("Saving ipset set")
@@ -167,19 +183,19 @@ func (s *IpsetCommandService) SaveSet(name, path string) error {
 
 // Restore восстанавливает наборы из файла.
 func (s *IpsetCommandService) Restore(path string) error {
-	s.logger.Info().Str("path", path).Msg("Restoring ipset configuration")
+	s.logger.Debug().Str("path", path).Msg("Restoring ipset configuration")
 	return s.cmdSvc.RunShell(fmt.Sprintf("ipset restore -exist < %s", path))
 }
 
 // RestoreForce восстанавливает наборы без флага пропуска существующих записей.
 func (s *IpsetCommandService) RestoreForce(path string) error {
-	s.logger.Info().Str("path", path).Msg("Force restoring ipset configuration")
+	s.logger.Debug().Str("path", path).Msg("Force restoring ipset configuration")
 	return s.cmdSvc.RunShell(fmt.Sprintf("ipset restore < %s", path))
 }
 
 // Rename переименовывает набор.
 func (s *IpsetCommandService) Rename(oldName, newName string) error {
-	s.logger.Info().
+	s.logger.Debug().
 		Str("old_name", oldName).
 		Str("new_name", newName).
 		Msg("Renaming ipset set")
@@ -188,7 +204,7 @@ func (s *IpsetCommandService) Rename(oldName, newName string) error {
 
 // Swap меняет содержимое двух наборов местами.
 func (s *IpsetCommandService) Swap(setName1, setName2 string) error {
-	s.logger.Info().
+	s.logger.Debug().
 		Str("set1", setName1).
 		Str("set2", setName2).
 		Msg("Swapping ipset sets")
@@ -202,13 +218,13 @@ func (s *IpsetCommandService) GetVersion() (string, error) {
 
 // FlushAll очищает все наборы.
 func (s *IpsetCommandService) FlushAll() error {
-	s.logger.Info().Msg("Flushing all ipset sets")
+	s.logger.Debug().Msg("Flushing all ipset sets")
 	return s.cmdSvc.Run("ipset", "flush")
 }
 
 // DestroyAll удаляет все наборы.
 func (s *IpsetCommandService) DestroyAll() error {
-	s.logger.Info().Msg("Destroying all ipset sets")
+	s.logger.Debug().Msg("Destroying all ipset sets")
 	return s.cmdSvc.Run("ipset", "destroy")
 }
 

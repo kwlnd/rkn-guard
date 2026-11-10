@@ -4,21 +4,18 @@ package service
 const (
 	// IpsetRestoreServiceTemplate восстанавливает ipset при загрузке.
 	IpsetRestoreServiceTemplate = `[Unit]
-Description=Restore rkn-guard ipset configuration
-Before=ufw.service
-Before=netfilter-persistent.service
+Description=Restore rkn-guard ipset and firewall rules
+Before=ufw.service netfilter-persistent.service
+After=local-fs.target
 DefaultDependencies=no
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/sbin/ipset restore -exist -f /etc/ipset.conf
-ExecStart=-/usr/sbin/iptables -N SCANNERS-BLOCK
-ExecStart=-/usr/sbin/ip6tables -N SCANNERS-BLOCK
+ExecStart=/usr/local/bin/rkn-guard restore
 
 [Install]
 WantedBy=multi-user.target
-RequiredBy=netfilter-persistent.service
 `
 
 	// MoveRulesServiceTemplate — старый сервис перестановки SCANNERS-BLOCK на первое место.
